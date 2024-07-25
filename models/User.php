@@ -2,30 +2,23 @@
 
 namespace app\models;
 
-class User extends \yii\base\BaseObject implements \yii\web\IdentityInterface
-{
-    public $id;
-    public $username;
-    public $password;
-    public $authKey;
-    public $accessToken;
+use app\constants\DbTable;
+use app\enums\UserRole;
+use Yii;
+use yii\behaviors\TimestampBehavior;
+use yii\db\ActiveRecord;
+use yii\db\Expression;
+use yii\web\IdentityInterface;
 
-    private static $users = [
-        '100' => [
-            'id' => '100',
-            'username' => 'admin',
-            'password' => 'admin',
-            'authKey' => 'test100key',
-            'accessToken' => '100-token',
-        ],
-        '101' => [
-            'id' => '101',
-            'username' => 'demo',
-            'password' => 'demo',
-            'authKey' => 'test101key',
-            'accessToken' => '101-token',
-        ],
-    ];
+
+class User extends ActiveRecord implements IdentityInterface
+{
+
+
+    public function getId()
+    {
+        return $this->id;
+    }
 
 
     /**
@@ -33,46 +26,43 @@ class User extends \yii\base\BaseObject implements \yii\web\IdentityInterface
      */
     public static function findIdentity($id)
     {
-        return isset(self::$users[$id]) ? new static(self::$users[$id]) : null;
+        return self::findOne(['id' => $id]);
     }
+
+
 
     /**
      * {@inheritdoc}
      */
-    public static function findIdentityByAccessToken($token, $type = null)
+    public function behaviors()
     {
-        foreach (self::$users as $user) {
-            if ($user['accessToken'] === $token) {
-                return new static($user);
-            }
-        }
-
-        return null;
+        return [
+            [
+                'class' => TimestampBehavior::class,
+                'attributes' => [
+                    ActiveRecord::EVENT_BEFORE_INSERT => ['created_at', 'updated_at'],
+                    ActiveRecord::EVENT_BEFORE_UPDATE => ['updated_at'],
+                ],
+                'value' => new Expression('NOW()'),
+            ],
+        ];
     }
 
-    /**
-     * Finds user by username
-     *
-     * @param string $username
-     * @return static|null
-     */
-    public static function findByUsername($username)
+    public static function tableName(): string
     {
-        foreach (self::$users as $user) {
-            if (strcasecmp($user['username'], $username) === 0) {
-                return new static($user);
-            }
-        }
-
-        return null;
+        return DbTable::USERS;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function getId()
+
+    public static function findByEmail(string $email): self|null
     {
-        return $this->id;
+        return self::findOne(['email' => $email]);
+    }
+
+
+    public function validatePassword(string $plainPassword): bool
+    {
+        return Yii::$app->security->validatePassword($plainPassword, $this->password);
     }
 
     /**
@@ -80,7 +70,7 @@ class User extends \yii\base\BaseObject implements \yii\web\IdentityInterface
      */
     public function getAuthKey()
     {
-        return $this->authKey;
+        return 'auth';
     }
 
     /**
@@ -88,17 +78,44 @@ class User extends \yii\base\BaseObject implements \yii\web\IdentityInterface
      */
     public function validateAuthKey($authKey)
     {
-        return $this->authKey === $authKey;
+        return true;
+    }
+    /**
+     * {@inheritdoc}
+     */
+    public static function findIdentityByAccessToken($token, $type = null)
+    {
+        return User::findOne(['access_token' => $token]);
     }
 
-    /**
-     * Validates password
-     *
-     * @param string $password password to validate
-     * @return bool if password provided is valid for current user
-     */
-    public function validatePassword($password)
+
+
+
+
+    public function isAdmin(): bool
     {
-        return $this->password === $password;
+        return $this->role === UserRole::ADMIN;
+    }
+    public function isUser(): bool
+    {
+        return $this->role === UserRole::User;
+    }
+    public function isManager(): bool
+    {
+        return $this->role === UserRole::MANAGER;
+    }
+    public function hasRole(...$roles): bool
+    {
+        foreach ($roles as $role)
+            if ($this->role === $role)
+                return true;
+        return false;
+    }
+
+    public function __get($name)
+    {
+        if ($name === 'username')
+            return $this->emai;
+        return parent::__get($name);
     }
 }
