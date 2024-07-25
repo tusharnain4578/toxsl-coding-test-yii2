@@ -42,7 +42,8 @@ class ProjectForm extends Model
         if (!$this->validate())
             return false;
         $project = new Project;
-        $project->setAttributes($this->getAttributes());
+        $project->title = $this->title;
+        $project->description = $this->description;
         $project->created_by = Yii::$app->user->identity->id;
         return $project->save();
     }
